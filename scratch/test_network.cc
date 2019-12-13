@@ -110,6 +110,8 @@ private:
   MeshHelper mesh;
   NodeContainer enbNodes;
   NodeContainer ueNodes;
+  MobilityHelper enbmobility;
+  MobilityHelper uemobility;
 private:
   /// Create nodes and setup their mobility
   void CreateNodes ();
@@ -156,7 +158,8 @@ MeshTest::Configure (int argc, char *argv[])
   cmd.AddValue ("ascii",   "Enable Ascii traces on interfaces", m_ascii);
   cmd.AddValue ("stack",  "Type of protocol stack. ns3::Dot11sStack by default", m_stack);
   cmd.AddValue ("root", "Mac address of root mesh point in HWMP", m_root);
-
+  Config::SetDefault ("ns3::MmWavePhyMacCommon::ResourceBlockNum", UintegerValue(1));
+	Config::SetDefault ("ns3::MmWavePhyMacCommon::ChunkPerRB", UintegerValue(72));
   cmd.Parse (argc, argv);
   NS_LOG_DEBUG ("Grid:" << m_xSize << "*" << m_ySize);
   NS_LOG_DEBUG ("Simulation time: " << m_totalTime << " s");
@@ -172,8 +175,8 @@ MeshTest::CreateNodes ()
    * Create m_ySize*m_xSize stations to form a grid topology
    */
   nodes.Create (m_ySize*m_xSize);
-  enbNodes.Create (1);
-  ueNodes.Create (1);
+  enbNodes.Create (m_ySize*m_xSize);
+  ueNodes.Create (m_ySize*m_xSize);
   // Configure YansWifiChannel
   YansWifiPhyHelper wifiPhy = YansWifiPhyHelper::Default ();
   YansWifiChannelHelper wifiChannel = YansWifiChannelHelper::Default ();
@@ -206,6 +209,8 @@ MeshTest::CreateNodes ()
   // Set number of interfaces - default is single-interface mesh point
   mesh.SetNumberOfInterfaces (m_nIfaces);
   // Install protocols and return container if MeshPointDevices
+  mesh.Install (wifiPhy, enbNodes);
+  mesh.Install (wifiPhy, ueNodes);
   meshDevices = mesh.Install (wifiPhy, nodes);
   // Setup mobility - static grid topology
   MobilityHelper mobility;
@@ -218,6 +223,8 @@ MeshTest::CreateNodes ()
                                  "LayoutType", StringValue ("RowFirst"));
   mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
   mobility.Install (nodes);
+  mobility.Install(enbNodes);
+  mobility.Install(ueNodes);
   if (m_pcap)
     wifiPhy.EnablePcapAll (std::string ("mp-"));
   if (m_ascii)
@@ -231,22 +238,24 @@ void MeshTest::installMmWave(){
 
   ptr_mmWave->Initialize();
 
-  Ptr<ListPositionAllocator> enbPositionAlloc = CreateObject<ListPositionAllocator> ();
-  enbPositionAlloc->Add (Vector (0.0, 0.0, 0.0));
+  // Ptr<ListPositionAllocator> enbPositionAlloc = CreateObject<ListPositionAllocator> ();
+  // enbPositionAlloc->Add (Vector (0.0, 0.0, 0.0));
+  //
+  //
+  // enbmobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
+  // enbmobility.SetPositionAllocator(enbPositionAlloc);
+  // enbmobility.Install (enbNodes);
+  // BuildingsHelper::Install (enbNodes);
+  //
+  //
+  // Ptr<ListPositionAllocator> uePositionAlloc = CreateObject<ListPositionAllocator> ();
+  // uePositionAlloc->Add (Vector (80.0, 0.0, 0.0));
 
-  MobilityHelper enbmobility;
-  enbmobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
-  enbmobility.SetPositionAllocator(enbPositionAlloc);
-  enbmobility.Install (enbNodes);
+  // uemobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
+  // uemobility.SetPositionAllocator(uePositionAlloc);
+  // uemobility.Install (nodes);
+  // BuildingsHelper::Install (nodes);
   BuildingsHelper::Install (enbNodes);
-
-  MobilityHelper uemobility;
-  Ptr<ListPositionAllocator> uePositionAlloc = CreateObject<ListPositionAllocator> ();
-  uePositionAlloc->Add (Vector (80.0, 0.0, 0.0));
-
-  uemobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
-  uemobility.SetPositionAllocator(uePositionAlloc);
-  uemobility.Install (ueNodes);
   BuildingsHelper::Install (ueNodes);
 
   NetDeviceContainer enbNetDev = ptr_mmWave->InstallEnbDevice (enbNodes);
@@ -267,6 +276,8 @@ MeshTest::InstallInternetStack ()
 {
   InternetStackHelper internetStack;
   internetStack.Install (nodes);
+  internetStack.Install(enbNodes);
+  internetStack.Install(ueNodes);
   Ipv4AddressHelper address;
   address.SetBase ("10.1.1.0", "255.255.255.0");
   interfaces = address.Assign (meshDevices);
